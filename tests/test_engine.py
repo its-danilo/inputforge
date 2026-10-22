@@ -11,15 +11,17 @@ import tempfile
 import time
 import types
 
+sys.dont_write_bytecode = True  # no __pycache__ left in the checkout
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ["INPUTFORGE_SOCKET"] = os.path.join(tempfile.mkdtemp(), "engine.sock")
+TMP = tempfile.TemporaryDirectory(prefix="inputforge-test-")  # config + socket, removed at exit
+os.environ["INPUTFORGE_SOCKET"] = os.path.join(TMP.name, "engine.sock")
 
 from evdev import ecodes as e  # noqa: E402
 
 from inputforge import config, hypr, keys, screen  # noqa: E402
 from inputforge import engine as eng  # noqa: E402
 
-config.DIR = tempfile.mkdtemp()
+config.DIR = TMP.name
 config.PATH = os.path.join(config.DIR, "config.json")
 
 GAME = {"address": "0xgame", "class": "org.vinegarhq.Sober", "title": "Roblox", "initialClass": "org.vinegarhq.Sober",
