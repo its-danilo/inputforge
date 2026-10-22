@@ -148,7 +148,12 @@ class Engine:
         self.screen_trigs = []  # [(binding, profile, region)] of the armed profile
         self.screen_task = None
         self.ref_capture = None  # {"until"}: a region reference being captured (HUD countdown)
-        self.ui_overlay = set()  # connections of the Game Bar while it covers the game
+        # InputForge surfaces over the game: connection -> None (the Game Bar: covers it, all
+        # runs rest while it's open) or [x, y, w, h] (the editor over a fullscreen game: runs
+        # rest only while the pointer is on it)
+        self.ui_overlay = {}
+        self.overlay_now = False
+        self.overlay_task = None
         self.toast = None  # {"text", "until"}
         self.submap = ""
         self.hud_proc = None
@@ -217,9 +222,31 @@ class Engine:
     def focus_address(self):
         """The window runs may act in: none while the Game Bar covers the game (a clicker
         would click inside it)."""
-        if self.ui_overlay or not self.focus:
+        if self.overlay_now or not self.focus:
             return None
         return self.focus["address"]
+
+    def update_overlay(self):
+        """overlay_now: the Game Bar is open, or the pointer is on the editor over the game.
+        While an editor is open the pointer is checked 10 times a second."""
+        rects = [r for r in self.ui_overlay.values() if r]
+        now = any(r is None for r in self.ui_overlay.values())
+        if not now and rects:
+            pos = hypr.cursor_pos()
+            now = bool(pos) and any(x <= pos[0] < x + w and y <= pos[1] < y + h for x, y, w, h in rects)
+        if rects and not self.overlay_task:
+            self.overlay_task = self.loop.create_task(self._watch_pointer())
+        if now != self.overlay_now:
+            self.overlay_now = now
+            self.on_focus_change()
+
+    async def _watch_pointer(self):
+        try:
+            while any(self.ui_overlay.values()):
+                await asyncio.sleep(0.1)
+                self.update_overlay()
+        finally:
+            self.overlay_task = None
 
     def on_focus_change(self):
         addr = self.focus_address()
@@ -296,7 +323,7 @@ class Engine:
         self.armed = self.resolve_profile()
         self.by_key = {}
         want = set()
-        if self.armed and not self.ui_overlay:  # hotkeys rest while the Game Bar is open
+        if self.armed and not self.overlay_now:  # hotkeys rest while the Game Bar/editor has the pointer
             for b in self.armed["bindings"]:
                 if not b["enabled"]:
                     continue
@@ -500,7 +527,7 @@ class Engine:
                 await asyncio.sleep(n)
                 self.refresh_focus()
             run.window = self.focus["address"] if self.focus else None
-            if self.ui_overlay:  # started from the Game Bar, still closing: wait for it
+            if self.overlay_now:  # started from the Game Bar/editor, still over the game: wait
                 run.status = "paused"
                 run.paused_by = "blur"
             if run.paused_by != "blur":
@@ -701,7 +728,7 @@ class Engine:
     # ------------------------------------------------------------------ screen triggers
     def update_screen_triggers(self):
         trigs = []
-        if self.armed and not self.ui_overlay:
+        if self.armed and not self.overlay_now:
             for b in self.armed["bindings"]:
                 t = b["trigger"]
                 if b["enabled"] and t["kind"] == "screen" and b["action"]["type"] != "remap":
@@ -936,7 +963,7 @@ class Engine:
                                  if len(self.picker["points"]) < len(self.picker["hint"]) else None)} if self.picker else None,
             "ref_capture": self.ref_capture,
             "watching": self.watch.active(),
-            "overlay": bool(self.ui_overlay),
+            "overlay": self.overlay_now,
             "toast": self.toast,
             "listening": self.dev.listening,
             "grabbed": [d["name"] for d in self.dev.info() if d["grabbed"]],
@@ -1080,8 +1107,8 @@ class Engine:
         finally:
             self.subscribers.discard(writer)
             if writer in self.ui_overlay:
-                self.ui_overlay.discard(writer)
-                self.on_focus_change()
+                del self.ui_overlay[writer]
+                self.update_overlay()
             writer.close()
 
     async def handle(self, msg, writer):
@@ -1173,11 +1200,12 @@ class Engine:
         if cmd == "choose_profile":
             return self.choose_profile(msg.get("profile"))
         if cmd == "ui_overlay":  # the Game Bar opened over the game (until it disconnects)
+            rect = msg.get("rect")
             if msg.get("open"):
-                self.ui_overlay.add(writer)
+                self.ui_overlay[writer] = [int(v) for v in rect][:4] if isinstance(rect, list) and len(rect) == 4 else None
             else:
-                self.ui_overlay.discard(writer)
-            self.on_focus_change()
+                self.ui_overlay.pop(writer, None)
+            self.update_overlay()
             return True
         if cmd == "region_mark":
             self.region_mark(msg.get("profile"), msg.get("region") or config.new_id())

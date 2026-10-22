@@ -304,6 +304,30 @@ async def test_screen_rotation_and_trigger():
         screen.capture = real_capture
 
 
+async def test_editor_over_game_pauses_under_pointer():
+    E = fresh()
+    d = Dev()
+    tap(E, d, e.KEY_F8)
+    await asyncio.sleep(0.15)
+    run = next(iter(E.runs.values()))
+    w = object()
+    hypr.cursor_pos = lambda: (50, 50)  # outside the editor
+    await E.command({"cmd": "ui_overlay", "open": True, "rect": [400, 200, 980, 720]}, w)
+    await asyncio.sleep(0.25)
+    assert run.status == "running" and E.by_key, "pointer on the game: keeps going"
+    hypr.cursor_pos = lambda: (700, 500)  # on the editor
+    await asyncio.sleep(0.25)
+    assert run.status == "paused" and not E.by_key, "pointer on the editor: rests"
+    hypr.cursor_pos = lambda: (50, 50)
+    await asyncio.sleep(0.25)
+    assert run.status == "running"
+    await E.command({"cmd": "ui_overlay", "open": False}, w)
+    await asyncio.sleep(0.15)
+    assert E.overlay_task is None
+    hypr.cursor_pos = lambda: (100, 200)
+    tap(E, d, e.KEY_F8)
+
+
 async def test_choose_profile():
     E = fresh()
     a = config.default_profile("RoGhoul", r"^org\.vinegarhq\.Sober$")

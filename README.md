@@ -20,8 +20,8 @@ meio de um jogo em tela cheia, até com o compositor bloqueando os atalhos dele.
   regex). Um perfil "Qualquer janela" vale no resto. Tudo o que roda **pausa quando o jogo
   perde o foco** e volta quando ele volta, e **segurar Esc** para tudo.
 - **No jogo:** um painel rápido por cima do jogo (1–9 liga e desliga, troca de perfil), a
-  janela completa abrindo ao lado do jogo e um HUD discreto com o que está rodando, as
-  contagens e a gravação.
+  janela completa por cima do jogo sem tirá-lo da tela cheia e um HUD discreto com o que
+  está rodando, as contagens e a gravação.
 - **Vários perfis para a mesma janela:** todos os jogos do Roblox rodam no Sober, por exemplo.
   Escolha qual vale no painel (clique no nome do perfil ou aperte P) ou na tela inicial; a
   escolha fica lembrada por jogo.
@@ -73,9 +73,11 @@ por cima do jogo: **1–9** ou clique liga e desliga, **P** (ou clicar no nome d
 o perfil, **E** abre a janela completa e **Esc** fecha. Enquanto o painel está aberto, o que
 está rodando pausa e os atalhos descansam (um autoclicker clicaria dentro dele).
 
-A **janela completa** abre ao lado do jogo: o jogo sai da tela cheia enquanto ela está aberta
-(os dois na tela, o mouse decide quem recebe) e volta para a tela cheia quando você a fecha.
-O que roda pausa enquanto o mouse está no InputForge, como em qualquer troca de janela.
+Com um jogo em **tela cheia**, a **janela completa** abre por cima dele sem tirá-lo da tela
+cheia (tirar pode derrubar alguns jogos). Ela é uma camada (layer), não uma janela comum: o
+teclado vai para quem você clicar (clique no jogo para jogar, no InputForge para editar),
+arraste pela barra do título para mover, e Esc ou o × fecham. O que roda pausa só enquanto o
+mouse está em cima dela. Sem jogo em tela cheia, ela é uma janela normal.
 
 **Iniciar pela janela** (▶): uma contagem aparece no HUD (tempo de levar o mouse até o alvo) e
 o atalho passa a valer na janela que estiver em foco quando ela terminar.

@@ -2,7 +2,7 @@
 
   inputforge [open]          the window. With a game on screen (special:game or a fullscreen
                              window): the Game Bar over it instead (toggle; bar.py)
-  inputforge open --full     the window even with a game on screen: beside it (the Game Bar's E)
+  inputforge open --full     the window even with a game on screen: over it (the Game Bar's E)
   inputforge engine          the engine (what inputforge.service runs)
   inputforge toggle NAME     start/stop a binding by name or id (e.g. from a compositor bind)
   inputforge stop            stop every run          panic   stop everything + release keys
@@ -34,7 +34,7 @@ def notify(text):
 def open_window(full=False):
     """With a game on screen (special:game or a fullscreen window): the Game Bar over it
     (toggle). With --full (the bar's E), or with no game: the window. Over a fullscreen game
-    it opens beside it: the game leaves fullscreen while the window is open (app.py).
+    the window is a layer over it (app.py --over): taking a game out of fullscreen can crash it.
     The game is never hidden or shown from here: that's the user's own key (on calOS SUPER + G,
     which Game Mode's lock and the keyboard lights follow)."""
     from inputforge import hypr, ipc
@@ -45,15 +45,13 @@ def open_window(full=False):
     if in_game and not full:
         toggle_bar()
         return
-    args = []
-    if in_game:
-        game = w if w and w["fullscreen"] and w["class"] != paths.APP_ID else next(
-            (c for c in hypr.jrequest("clients", []) or []
-             if (c.get("workspace") or {}).get("name") == "special:game" and c.get("fullscreen")), None)
-        if game:
-            args = ["--beside", game["address"]]
+    game = w if w and w["fullscreen"] and w["class"] != paths.APP_ID else next(
+        (c for c in hypr.jrequest("clients", []) or []
+         if (c.get("workspace") or {}).get("name") == "special:game" and c.get("fullscreen")), None) if in_game else None
+    if game:  # a fullscreen game: the window goes over it as a layer, the game stays untouched
+        layer_exec("inputforge.app", "--over")
     from inputforge import app
-    app.main(args)
+    app.main()
 
 
 def layer_exec(module, *args):

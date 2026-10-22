@@ -8,10 +8,14 @@ engine (set_config). The engine echoes every saved config to all windows; an ech
 save is ignored, anything else (the Game Bar, a region marked in game, another window)
 replaces self.cfg and rebuilds the page.
 
-Opened over a game (`inputforge open --full` with a fullscreen game on screen) it opens beside
-it: the CLI passes `--beside ADDRESS`, the game leaves fullscreen while this window is open
-(so both can be used, the mouse decides who gets the input) and goes back to fullscreen when
-it closes. Single instance (paths.APP_ID): a second launch presents this window.
+Over a fullscreen game (`inputforge open --full`, the Game Bar's E) it can't be a window: a
+fullscreen window covers every other one, and taking the game out of fullscreen can crash some
+games. So with `--over` it's the same window in a layer-shell surface (LD_PRELOAD by the CLI)
+over the game, which stays fullscreen and untouched:
+  - the keyboard goes where you click (on-demand): click the game to play, here to type
+  - drag the header to move it; Esc or the close button closes it
+  - it tells the engine its rectangle (ui_overlay): runs rest while the pointer is on it
+Single instance per shape (paths.APP_ID / paths.EDITOR_ID): a second launch presents it.
 """
 
 import os
@@ -32,7 +36,12 @@ from inputforge import widgets as W  # noqa: E402
 from inputforge.client import Client  # noqa: E402
 from inputforge.editor import Editor  # noqa: E402
 from inputforge.pages import Pages  # noqa: E402
-from inputforge.paths import APP_ID  # noqa: E402
+from inputforge.paths import APP_ID, EDITOR_ID, NS_EDITOR  # noqa: E402
+
+OVER = "--over" in sys.argv[1:]  # the editor over a fullscreen game (layer-shell)
+OVER_CSS = """
+window.inputforge-over { border-radius: 14px; border: 1px solid alpha(currentColor, 0.16); }
+"""
 
 
 class Window(Pages, Editor, Adw.ApplicationWindow):
@@ -49,7 +58,7 @@ class Window(Pages, Editor, Adw.ApplicationWindow):
         self.capturing = False
         self.record_for = None  # (pid, bid, mode) while the recorder runs for a macro
         self.pick_for = None  # (pid, bid) while points are being marked for a clicker
-        self.beside = None  # address of the game this window opened beside
+        self.layer_rect = None  # [x, y, w, h] on screen when it's the editor over the game
         self._save_soon = W.later(350, self._flush)
 
         self.toasts = Adw.ToastOverlay()
@@ -79,6 +88,8 @@ class Window(Pages, Editor, Adw.ApplicationWindow):
         self.client = Client()
         self.client.on_event = self.on_event
         self.client.on_up = self.on_engine_up
+        if OVER:
+            self.over_game()
         self.load()
         self.connect("close-request", self.on_close)
 
@@ -250,48 +261,90 @@ class Window(Pages, Editor, Adw.ApplicationWindow):
             pages.append(self.binding_page(*editor))
         self.nav.replace(pages)
 
-    # ---- beside the game ---------------------------------------------------------------
-    def open_beside(self, address):
-        """Unfullscreen the game this window opened over, and bring this window to the game's
-        workspace if it was born elsewhere; on_close puts the fullscreen back."""
-        self.beside = address
-        GLib.timeout_add(250, self._place_beside)
+    # ---- over a fullscreen game -----------------------------------------------------------
+    def over_game(self):
+        gi.require_version("Gtk4LayerShell", "1.0")
+        from gi.repository import Gdk
+        from gi.repository import Gtk4LayerShell as LayerShell
+        self.LS = LayerShell
+        css = Gtk.CssProvider()
+        css.load_from_string(OVER_CSS)
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.add_css_class("inputforge-over")
+        LayerShell.init_for_window(self)
+        LayerShell.set_namespace(self, NS_EDITOR)
+        LayerShell.set_layer(self, LayerShell.Layer.OVERLAY)
+        LayerShell.set_keyboard_mode(self, LayerShell.KeyboardMode.ON_DEMAND)
+        LayerShell.set_exclusive_zone(self, -1)
+        mon = hypr.focused_monitor() or {"name": None, "x": 0, "y": 0, "width": 1920, "height": 1080, "scale": 1}
+        self.mon = {"x": mon["x"], "y": mon["y"], "w": int(mon["width"] / mon["scale"]), "h": int(mon["height"] / mon["scale"])}
+        monitors = Gdk.Display.get_default().get_monitors()
+        for i in range(monitors.get_n_items()):
+            m = monitors.get_item(i)
+            if m.get_connector() == mon.get("name"):
+                LayerShell.set_monitor(self, m)
+        w, h = min(980, self.mon["w"] - 60), min(720, self.mon["h"] - 60)
+        self.set_default_size(w, h)
+        self.size = (w, h)
+        # anchored to the top-left corner with margins, so dragging is just new margins
+        LayerShell.set_anchor(self, LayerShell.Edge.TOP, True)
+        LayerShell.set_anchor(self, LayerShell.Edge.LEFT, True)
+        self.margins = [(self.mon["w"] - w) // 2, (self.mon["h"] - h) // 2]
+        self.apply_margins()
 
-    def _place_beside(self):
-        game = next((c for c in (hypr.jrequest("clients", []) or []) if c.get("address") == self.beside), None)
-        if not game:
-            self.beside = None
-            return False
-        mine = next((c for c in hypr.jrequest("clients", []) or [] if c.get("pid") == os.getpid()), None)
-        if mine and (mine.get("workspace") or {}).get("name") != (game.get("workspace") or {}).get("name"):
-            ws = game["workspace"]["name"]
-            hypr.request(f'dispatch hl.dsp.window.move({{workspace = "{ws}", window = "address:{mine["address"]}"}})')
-        if game.get("fullscreen"):
-            hypr.request(f'dispatch hl.dsp.window.fullscreen({{action = "unset", window = "address:{self.beside}"}})')
-        if mine:
-            hypr.request(f'dispatch hl.dsp.focus({{window = "address:{mine["address"]}"}})')
-        return False
+        drag = Gtk.GestureDrag()
+        drag.connect("drag-begin", self.drag_begin)
+        drag.connect("drag-update", self.drag_update)
+        drag.connect("drag-end", lambda *_a: self.report_rect())
+        self.add_controller(drag)
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", lambda _c, kv, _kc, _st: (self.close(), True)[1] if kv == Gdk.KEY_Escape else False)
+        self.add_controller(keys)
+        self.client.on_up = lambda up: (self.report_rect() if up else None, self.on_engine_up(up))
+        self.report_rect()  # the client is already connected: on_up only fires on reconnections
+
+    def apply_margins(self):
+        self.LS.set_margin(self, self.LS.Edge.LEFT, self.margins[0])
+        self.LS.set_margin(self, self.LS.Edge.TOP, self.margins[1])
+
+    def drag_begin(self, gesture, x, y):
+        # only from the header area (the rows, buttons and entries keep their own clicks)
+        if y > 50:
+            gesture.set_state(Gtk.EventSequenceState.DENIED)
+            return
+        self.drag_from = (hypr.cursor_pos(), list(self.margins))
+
+    def drag_update(self, gesture, dx, dy):
+        start = getattr(self, "drag_from", None)
+        pos = hypr.cursor_pos()
+        if not start or not start[0] or not pos:
+            return
+        (cx, cy), (mx, my) = start
+        w, h = self.size
+        self.margins = [max(0, min(self.mon["w"] - w, mx + pos[0] - cx)), max(0, min(self.mon["h"] - h, my + pos[1] - cy))]
+        self.apply_margins()
+
+    def report_rect(self):
+        """Where this surface is, so the engine rests runs while the pointer is on it."""
+        self.drag_from = None
+        w, h = self.size
+        rect = [self.mon["x"] + self.margins[0], self.mon["y"] + self.margins[1], w, h]
+        self.client.request("ui_overlay", {"open": True, "rect": rect})
 
     def on_close(self, *_a):
         self._save_soon.flush()  # an edit still waiting for its debounce
-        if self.beside:
-            game = next((c for c in (hypr.jrequest("clients", []) or []) if c.get("address") == self.beside), None)
-            if game and not game.get("fullscreen"):
-                hypr.request(f'dispatch hl.dsp.window.fullscreen({{mode = "fullscreen", action = "set", window = "address:{self.beside}"}})')
         return False
 
 
 class App(Adw.Application):
     def __init__(self):
-        super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
+        super().__init__(application_id=EDITOR_ID if OVER else APP_ID, flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
         self.win = None
 
     def do_command_line(self, cmdline):
         args = cmdline.get_arguments()[1:]
         if not self.win:
             self.win = Window(self)
-        if "--beside" in args and args.index("--beside") + 1 < len(args):
-            self.win.open_beside(args[args.index("--beside") + 1])
         self.win.present()
         return 0
 
