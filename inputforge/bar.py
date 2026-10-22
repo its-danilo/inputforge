@@ -44,7 +44,14 @@ from inputforge.paths import BAR_PID, SOCKET  # noqa: E402
 
 MODE_NAME = {"toggle": "alternar", "hold": "segurar", "once": "uma vez"}
 CSS = """
-window.inputforge-panel { border-radius: 16px; border: 1px solid alpha(currentColor, 0.14); }
+/* a touch of see-through. Light on purpose: Hyprland 0.56.2 doesn't draw blur on this machine
+   (tested 2026-10-22: no blur on tiled, floating or layer surfaces), so a stronger see-through
+   showed the game sharp behind the text. The layer rule blur on inputforge-bar stays for when
+   it works. */
+window.inputforge-panel { border-radius: 16px; border: 1px solid alpha(currentColor, 0.14);
+                          background-color: color-mix(in srgb, var(--window-bg-color) 88%, transparent); }
+window.inputforge-panel headerbar { background: none; box-shadow: none; }
+window.inputforge-panel list.boxed-list { background-color: color-mix(in srgb, var(--card-bg-color) 85%, transparent); }
 window.inputforge-panel headerbar { border-top-left-radius: 16px; border-top-right-radius: 16px; }
 .panel-foot { padding: 4px 14px 14px 18px; }
 window.inputforge-panel list.boxed-list > row:selected { background: alpha(currentColor, 0.07); }
