@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=InputForge
+GenericName=Autoclicker e macros
+Comment=Autoclicker, macros e remapeamento de teclas por jogo
+Exec=inputforge
+Icon=io.github.its_danilo.InputForge
+Terminal=false
+Categories=Utility;Game;
+Keywords=autoclicker;autoclick;macro;autohotkey;ahk;hotkey;remap;clicker;jogo;
+StartupNotify=true
+StartupWMClass=io.github.its_danilo.InputForge

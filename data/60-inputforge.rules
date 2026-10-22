@@ -1,0 +1,3 @@
+# InputForge: lets the logged-in user create virtual keyboards/mice (/dev/uinput), which is
+# how macros press keys and click. uaccess = only the user sitting at the machine.
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"

@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""InputForge: autoclicker, macros, screen-aware rotations and per-game remaps for Hyprland.
+`inputforge --help` lists the commands (inputforge/cli.py)."""
+
+import os
+import sys
+
+# the package lives next to bin/ in a checkout, or in ../share/inputforge once installed
+_here = os.path.dirname(os.path.realpath(__file__))
+for _root in (os.path.dirname(_here), os.path.join(os.path.dirname(_here), "share", "inputforge")):
+    if os.path.isfile(os.path.join(_root, "inputforge", "engine.py")):
+        sys.path.insert(0, _root)
+        break
+
+from inputforge.cli import main  # noqa: E402
+
+main()

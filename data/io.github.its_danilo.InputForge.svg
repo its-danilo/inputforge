@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a2a30"/><stop offset="1" stop-color="#0e0e12"/></linearGradient>
+    <linearGradient id="fire" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb347"/><stop offset=".55" stop-color="#ff6a1a"/><stop offset="1" stop-color="#e8240c"/></linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".42" r=".5"><stop offset="0" stop-color="#ff7a1a" stop-opacity=".55"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect x="6" y="6" width="116" height="116" rx="30" fill="url(#bg)"/>
+  <rect x="6.5" y="6.5" width="115" height="115" rx="29.5" fill="none" stroke="#fff" stroke-opacity=".1"/>
+  <circle cx="64" cy="58" r="46" fill="url(#glow)"/>
+  <path d="M24 56h58l17-13v20l-13 10H62l7 17h12v10H35V90h12l7-17H38c-8.5 0-14-5.6-14-12z" fill="url(#fire)"/>
+  <path d="M58 18l4 10.5 10.5 4L62 36.5 58 47l-4-10.5L43.5 32.5 54 28.5z" fill="#fff" fill-opacity=".92"/>
+  <circle cx="86" cy="26" r="3" fill="#ffd27a"/><circle cx="96" cy="38" r="2" fill="#ff9a3a"/>
+</svg>
