@@ -95,11 +95,12 @@ cerca de 15 vezes por segundo, só enquanto algo o usa.
 
 ## Integração
 
-O instalador não mexe na configuração do Hyprland nem da waybar. Exemplos:
+O instalador não mexe na configuração do Hyprland nem da waybar. Exemplos (o Hyprland
+nem sempre tem `~/.local/bin` no PATH; com o caminho completo funciona sempre):
 
 ```lua
 -- hyprland.lua (config em Lua)
-hl.bind("SUPER + CTRL + A", hl.dsp.exec_cmd("inputforge"), { description = "Apps: InputForge" })
+hl.bind("SUPER + CTRL + A", hl.dsp.exec_cmd("~/.local/bin/inputforge"), { description = "Apps: InputForge" })
 hl.window_rule({ match = { class = "^(io.github.its_danilo.InputForge)$" },
                  center = true, float = true, opacity = "1 1", size = "1280 820" })
 hl.layer_rule({ match = { namespace = "inputforge-hud" }, blur = true, ignore_alpha = 0.3 })
@@ -108,7 +109,7 @@ hl.layer_rule({ match = { namespace = "inputforge-bar" }, blur = true, ignore_al
 
 ```ini
 # hyprland.conf
-bind = SUPER CTRL, A, exec, inputforge
+bind = SUPER CTRL, A, exec, ~/.local/bin/inputforge
 windowrule = float, class:^(io.github.its_danilo.InputForge)$
 windowrule = center, class:^(io.github.its_danilo.InputForge)$
 windowrule = size 1280 820, class:^(io.github.its_danilo.InputForge)$
@@ -124,12 +125,12 @@ Waybar: um ícone só enquanto algo roda (clique abre, botão direito para tudo)
 
 ```jsonc
 "custom/inputforge": {
-  "exec": "inputforge waybar", "return-type": "json", "signal": 14,
-  "on-click": "inputforge", "on-click-right": "inputforge stop"
+  "exec": "~/.local/bin/inputforge waybar", "return-type": "json", "signal": 14,
+  "on-click": "~/.local/bin/inputforge", "on-click-right": "~/.local/bin/inputforge stop"
 }
 ```
 
-Cores: num calOS seguem o tema atual (rode `inputforge theme` ao trocar de tema). Fora dele, uma
+Cores: num calOS seguem o tema atual (rode `~/.local/bin/inputforge theme` ao trocar de tema). Fora dele, uma
 paleta escura própria, e `~/.config/inputforge/theme.json` sobrescreve qualquer cor:
 `{"accent": "#7aa2f7", "background": "#16161e", "foreground": "#c0caf5"}`.
 

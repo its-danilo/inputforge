@@ -126,7 +126,8 @@ do_install() {
   ok "comando → ${BIN/#$HOME/\~}/inputforge"
   # absolute Exec: desktop launchers often don't have ~/.local/bin in their PATH
   mkdir -p "$(dirname "$DESKTOP")"
-  sed "s|^Exec=inputforge|Exec=$BIN/inputforge|" "$SRC/data/$APP_ID.desktop" >"$DESKTOP"
+  # and an absolute Icon: a launcher already running may not rescan the icon theme for a new name
+  sed -e "s|^Exec=inputforge|Exec=$BIN/inputforge|" -e "s|^Icon=.*|Icon=$ICON|" "$SRC/data/$APP_ID.desktop" >"$DESKTOP"
   install -Dm644 "$SRC/data/$APP_ID.svg" "$ICON"
   ok "atalho no menu de aplicativos (InputForge)"
   install -Dm644 "$SRC/data/inputforge.service" "$UNIT"
