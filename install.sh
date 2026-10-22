@@ -32,8 +32,8 @@ packages() {
   local id=""
   [[ -r /etc/os-release ]] && id=$(. /etc/os-release; echo "${ID:-} ${ID_LIKE:-}")
   case " $id " in
-    *" arch "*) echo "sudo pacman -S --needed python-gobject gtk4 gtk4-layer-shell webkitgtk-6.0 python-evdev grim libxkbcommon inter-font" ;;
-    *)          echo "(instale: Python 3, PyGObject, GTK 4, gtk4-layer-shell, WebKitGTK 6.0, python-evdev, grim, libxkbcommon)" ;;
+    *" arch "*) echo "sudo pacman -S --needed python-gobject gtk4 libadwaita gtk4-layer-shell python-evdev grim libxkbcommon" ;;
+    *)          echo "(instale: Python 3, PyGObject, GTK 4, libadwaita 1.5+, gtk4-layer-shell, python-evdev, grim, libxkbcommon)" ;;
   esac
 }
 
@@ -53,25 +53,20 @@ do_check() {
   if python3 - 2>/dev/null <<'PY'
 import gi
 gi.require_version("Gtk", "4.0")
-gi.require_version("WebKit", "6.0")
+gi.require_version("Adw", "1")
 gi.require_version("Gtk4LayerShell", "1.0")
-from gi.repository import Gtk, WebKit, Gtk4LayerShell
+from gi.repository import Adw, Gtk, Gtk4LayerShell
+assert (Adw.MAJOR_VERSION, Adw.MINOR_VERSION) >= (1, 5)
 PY
   then
-    ok "GTK 4 + WebKitGTK 6 + gtk4-layer-shell"
+    ok "GTK 4 + libadwaita + gtk4-layer-shell"
   else
-    fail "falta PyGObject, GTK 4, WebKitGTK 6.0 ou gtk4-layer-shell"; missing=1
+    fail "falta PyGObject, GTK 4, libadwaita 1.5+ ou gtk4-layer-shell"; missing=1
   fi
   if python3 -c "import evdev" 2>/dev/null; then ok "python-evdev"; else fail "falta python-evdev"; missing=1; fi
   if python3 -c "import ctypes; ctypes.CDLL('libxkbcommon.so.0')" 2>/dev/null; then ok "libxkbcommon"; else fail "falta libxkbcommon"; missing=1; fi
   if command -v grim >/dev/null; then ok "grim (observador de tela)"; else fail "falta grim"; missing=1; fi
   if command -v hyprctl >/dev/null; then ok "Hyprland"; else warn "hyprctl não encontrado: o InputForge foi feito para o Hyprland (foco, cursor, layouts)"; fi
-  # grep -c reads everything: a grep -q closing the pipe early fails under pipefail
-  if (( $(fc-list : family 2>/dev/null | grep -ci '^inter') > 0 )); then
-    ok "fonte Inter"
-  else
-    warn "fonte Inter não instalada (opcional, a interface foi desenhada com ela)"
-  fi
   if id -nG | tr ' ' '\n' | grep -qx input; then
     ok "usuário no grupo input (ler os atalhos)"
   else
@@ -118,9 +113,8 @@ do_install() {
 
   step "Instalando em ${LOCAL/#$HOME/\~}"
   rm -rf "$SHARE"
-  mkdir -p "$SHARE/inputforge" "$SHARE/ui" "$BIN"
+  mkdir -p "$SHARE/inputforge" "$BIN"
   cp "$SRC"/inputforge/*.py "$SHARE/inputforge/"
-  cp "$SRC"/ui/* "$SHARE/ui/"
   ok "programa → ${SHARE/#$HOME/\~}"
   install -m755 "$SRC/bin/inputforge" "$BIN/inputforge"
   ok "comando → ${BIN/#$HOME/\~}/inputforge"

@@ -304,6 +304,32 @@ async def test_screen_rotation_and_trigger():
         screen.capture = real_capture
 
 
+async def test_choose_profile():
+    E = fresh()
+    a = config.default_profile("RoGhoul", r"^org\.vinegarhq\.Sober$")
+    b = config.default_profile("Combat Rift", r"^org\.vinegarhq\.Sober$")
+    E.cfg["profiles"] += [a, b]
+    E.cfg = config.normalize(E.cfg)
+    E.apply()
+    assert E.armed["name"] == "RoGhoul"  # first match until one is chosen
+    assert [c["name"] for c in E.state()["candidates"]] == ["RoGhoul", "Combat Rift"]
+    E.choose_profile(b["id"])
+    assert E.armed["name"] == "Combat Rift"
+    assert E.cfg["settings"]["chosen"]["org.vinegarhq.Sober"] == b["id"]
+    FOCUS["w"] = {**GAME, "address": "0xother", "class": "Alacritty", "initialClass": "Alacritty"}
+    E.refresh_focus()
+    assert E.armed["id"] == "global"
+    FOCUS["w"] = dict(GAME)
+    E.refresh_focus()
+    assert E.armed["name"] == "Combat Rift", "the choice must be remembered"
+    E.profile_off = next(p for p in E.cfg["profiles"] if p["name"] == "RoGhoul")
+    E.profile_off["enabled"] = False
+    E.apply()
+    assert [c["name"] for c in E.state()["candidates"]] == ["RoGhoul", "Combat Rift"], "switched-off ones still listed"
+    E.choose_profile(a["id"])
+    assert E.armed["name"] == "RoGhoul" and E.profile_off["enabled"], "picking it turns it on"
+
+
 async def main():
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     failed = 0

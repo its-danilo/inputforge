@@ -43,7 +43,7 @@ def _render_drivers():
 
 def intel_gpu_env(env):
     """On hybrid laptops (an Intel/AMD iGPU drives the screens + an NVIDIA dGPU), keep GTK and
-    WebKit on the iGPU: launched with NVIDIA's GL env (common in Hyprland configs, for games)
+    its renderer on the iGPU: launched with NVIDIA's GL env (common in Hyprland configs, for games)
     the window rendered on the NVIDIA and every frame crossed GPUs (~20% CPU just hovering,
     laggy UI, dGPU awake). GSK's GL renderer, since GTK's Vulkan one may pick the NVIDIA.
     Nothing changes on single-GPU machines. INPUTFORGE_GPU=default turns it off.

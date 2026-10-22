@@ -148,7 +148,7 @@ class Engine:
         self.screen_trigs = []  # [(binding, profile, region)] of the armed profile
         self.screen_task = None
         self.ref_capture = None  # {"until"}: a region reference being captured (HUD countdown)
-        self.ui_overlay = set()  # connections of the editor/Game Bar while they cover the game
+        self.ui_overlay = set()  # connections of the Game Bar while it covers the game
         self.toast = None  # {"text", "until"}
         self.submap = ""
         self.hud_proc = None
@@ -188,6 +188,9 @@ class Engine:
 
     # ------------------------------------------------------------------ hyprland
     def on_hypr(self, name, data):
+        if name == "connected":  # the submap events only tell changes: ask for the current one
+            sm = hypr.request("submap").strip()
+            self.submap = "" if sm in ("", "default") else sm
         if name in ("activewindowv2", "connected", "workspace", "focusedmon", "activespecial"):
             self.refresh_focus()
         elif name == "closewindow":
@@ -212,8 +215,8 @@ class Engine:
             self.on_focus_change()
 
     def focus_address(self):
-        """The window runs may act in: none while the editor or the Game Bar covers the game
-        (a clicker would click inside them)."""
+        """The window runs may act in: none while the Game Bar covers the game (a clicker
+        would click inside it)."""
         if self.ui_overlay or not self.focus:
             return None
         return self.focus["address"]
@@ -247,21 +250,53 @@ class Engine:
             return False
         return True
 
+    def candidates(self, w, include_off=False):
+        """Game profiles that match window w (several games can share one window class:
+        every Roblox game runs in Sober). Only enabled ones arm; the switcher lists all."""
+        if not w or w["class"] == OWN_CLASS:
+            return []
+        return [p for p in self.cfg["profiles"][1:] if (include_off or p["enabled"]) and self.match(p, w)]
+
+    def game_window(self):
+        """The game the windows talk about: the focused window, or the last game while
+        InputForge itself has focus."""
+        return self.focus if self.focus and self.focus["class"] != OWN_CLASS else self.last_game
+
+    def profile_for(self, w):
+        cands = self.candidates(w)
+        if not cands:
+            return None
+        chosen = self.cfg["settings"]["chosen"].get(w["class"])
+        return next((p for p in cands if p["id"] == chosen), cands[0])
+
     def resolve_profile(self):
-        w = self.focus
-        if w and w["class"] != OWN_CLASS:
-            for p in self.cfg["profiles"][1:]:
-                if p["enabled"] and self.match(p, w):
-                    return p
+        p = self.profile_for(self.focus)
+        if p:
+            return p
         g = self.cfg["profiles"][0]
         return g if self.cfg["settings"]["global_enabled"] else None
+
+    def choose_profile(self, pid):
+        """Make pid the active profile for the game it matches (the focused window, or the
+        last game when InputForge itself has focus); remembered in the config."""
+        w = self.game_window()
+        p = next((p for p in self.candidates(w, include_off=True) if p["id"] == pid), None)
+        if not p:
+            raise ValueError("esse perfil não serve para a janela do jogo")
+        p["enabled"] = True  # picking a switched-off profile turns it on
+        self.cfg["settings"]["chosen"][w["class"]] = pid
+        config.save(self.cfg)
+        self.apply()
+        self.broadcast({"event": "config", "config": self.cfg})
+        self.show_toast(f"Perfil {p['name']} ativo")
+        return True
 
     def apply(self):
         prev = self.armed["id"] if self.armed else None
         self.armed = self.resolve_profile()
         self.by_key = {}
         want = set()
-        if self.armed and not self.ui_overlay:  # hotkeys rest while the editor/Game Bar is open
+        if self.armed and not self.ui_overlay:  # hotkeys rest while the Game Bar is open
             for b in self.armed["bindings"]:
                 if not b["enabled"]:
                     continue
@@ -465,7 +500,7 @@ class Engine:
                 await asyncio.sleep(n)
                 self.refresh_focus()
             run.window = self.focus["address"] if self.focus else None
-            if self.ui_overlay:  # started from the Game Bar/editor, still closing: wait for it
+            if self.ui_overlay:  # started from the Game Bar, still closing: wait for it
                 run.status = "paused"
                 run.paused_by = "blur"
             if run.paused_by != "blur":
@@ -888,6 +923,9 @@ class Engine:
             "armed": {"id": armed["id"], "name": armed["name"],
                       "bindings": sum(1 for b in armed["bindings"] if b["enabled"])} if armed else None,
             "focus": {k: self.focus[k] for k in ("class", "title", "workspace")} if self.focus else None,
+            "candidates": [{"id": p["id"], "name": p["name"], "enabled": p["enabled"]} for p in
+                           self.candidates(self.game_window(), include_off=True)],
+            "game_profile": (lambda p: {"id": p["id"], "name": p["name"]} if p else None)(self.profile_for(self.game_window())),
             "last_game": {k: self.last_game[k] for k in ("class", "title")} if self.last_game else None,
             "recent": [{k: r[k] for k in ("class", "title", "workspace", "fullscreen")} for r in self.recent],
             "runs": [r.info() for r in self.runs.values()],
@@ -1132,7 +1170,9 @@ class Engine:
         if cmd == "pick_stop":
             self.pick_stop()
             return True
-        if cmd == "ui_overlay":  # the editor/Game Bar opened over the game (until it disconnects)
+        if cmd == "choose_profile":
+            return self.choose_profile(msg.get("profile"))
+        if cmd == "ui_overlay":  # the Game Bar opened over the game (until it disconnects)
             if msg.get("open"):
                 self.ui_overlay.add(writer)
             else:

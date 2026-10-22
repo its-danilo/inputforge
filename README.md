@@ -19,26 +19,28 @@ meio de um jogo em tela cheia, até com o compositor bloqueando os atalhos dele.
 - **Perfis por jogo:** ligam sozinhos quando a janela do jogo ganha foco (classe/título por
   regex). Um perfil "Qualquer janela" vale no resto. Tudo o que roda **pausa quando o jogo
   perde o foco** e volta quando ele volta, e **segurar Esc** para tudo.
-- **No jogo:** um painel rápido por cima do jogo (1–9 liga e desliga), um editor completo
-  também por cima dele (o jogo continua em tela cheia) e um HUD discreto com o que está
-  rodando, as contagens e a gravação.
+- **No jogo:** um painel rápido por cima do jogo (1–9 liga e desliga, troca de perfil), a
+  janela completa abrindo ao lado do jogo e um HUD discreto com o que está rodando, as
+  contagens e a gravação.
+- **Vários perfis para a mesma janela:** todos os jogos do Roblox rodam no Sober, por exemplo.
+  Escolha qual vale no painel (clique no nome do perfil ou aperte P) ou na tela inicial; a
+  escolha fica lembrada por jogo.
 
-A interface é uma página HTML/CSS num WebKitGTK; o HUD e o painel são GTK 4 + layer-shell.
-Tudo em português.
+A janela é GTK 4 + libadwaita e segue o tema do sistema; o HUD e o painel rápido são GTK 4 +
+layer-shell. Tudo em português.
 
 ## Requisitos
 
 - Hyprland (foco de janelas, cursor, layouts de teclado)
-- Python 3, PyGObject, GTK 4, gtk4-layer-shell, WebKitGTK 6.0
+- Python 3, PyGObject, GTK 4, libadwaita 1.5+, gtk4-layer-shell
 - python-evdev, libxkbcommon, grim (observador de tela)
 - seu usuário no grupo `input` (para ler os atalhos) e `/dev/uinput` liberado (o instalador
   cuida da regra udev)
-- opcional: a fonte Inter (a interface foi desenhada com ela)
 
 No Arch:
 
 ```sh
-sudo pacman -S --needed python-gobject gtk4 gtk4-layer-shell webkitgtk-6.0 python-evdev grim libxkbcommon inter-font
+sudo pacman -S --needed python-gobject gtk4 libadwaita gtk4-layer-shell python-evdev grim libxkbcommon
 sudo usermod -aG input $USER   # e entre de novo na sessão
 ```
 
@@ -67,12 +69,16 @@ rápido** (o F8 liga e desliga em qualquer janela); o resto vive nos **perfis**:
 3. No jogo, aperte o atalho. O HUD mostra o que está rodando.
 
 **Dentro do jogo**, o atalho que abre o InputForge (veja Integração) abre o **painel rápido**
-por cima do jogo: **1–9** ou clique liga e desliga, **E** abre o editor completo (também por
-cima do jogo) e **Esc** fecha. Enquanto o painel ou o editor estão abertos, o que está
-rodando pausa e os atalhos descansam (um autoclicker clicaria dentro deles).
+por cima do jogo: **1–9** ou clique liga e desliga, **P** (ou clicar no nome do perfil) troca
+o perfil, **E** abre a janela completa e **Esc** fecha. Enquanto o painel está aberto, o que
+está rodando pausa e os atalhos descansam (um autoclicker clicaria dentro dele).
 
-**Iniciar pela janela** (▶): a janela fecha, uma contagem aparece no HUD (tempo de levar o mouse
-até o alvo) e o atalho passa a valer na janela que estiver em foco quando ela terminar.
+A **janela completa** abre ao lado do jogo: o jogo sai da tela cheia enquanto ela está aberta
+(os dois na tela, o mouse decide quem recebe) e volta para a tela cheia quando você a fecha.
+O que roda pausa enquanto o mouse está no InputForge, como em qualquer troca de janela.
+
+**Iniciar pela janela** (▶): uma contagem aparece no HUD (tempo de levar o mouse até o alvo) e
+o atalho passa a valer na janela que estiver em foco quando ela terminar.
 
 ### Observador de tela
 
@@ -102,7 +108,7 @@ nem sempre tem `~/.local/bin` no PATH; com o caminho completo funciona sempre):
 -- hyprland.lua (config em Lua)
 hl.bind("SUPER + CTRL + A", hl.dsp.exec_cmd("~/.local/bin/inputforge"), { description = "Apps: InputForge" })
 hl.window_rule({ match = { class = "^(io.github.its_danilo.InputForge)$" },
-                 center = true, float = true, opacity = "1 1", size = "1280 820" })
+                 center = true, float = true, size = "980 720" })
 hl.layer_rule({ match = { namespace = "inputforge-hud" }, blur = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "inputforge-bar" }, blur = true, ignore_alpha = 0.3 })
 ```
@@ -112,7 +118,7 @@ hl.layer_rule({ match = { namespace = "inputforge-bar" }, blur = true, ignore_al
 bind = SUPER CTRL, A, exec, ~/.local/bin/inputforge
 windowrule = float, class:^(io.github.its_danilo.InputForge)$
 windowrule = center, class:^(io.github.its_danilo.InputForge)$
-windowrule = size 1280 820, class:^(io.github.its_danilo.InputForge)$
+windowrule = size 980 720, class:^(io.github.its_danilo.InputForge)$
 layerrule = blur, inputforge-hud
 layerrule = blur, inputforge-bar
 ```
@@ -130,8 +136,9 @@ Waybar: um ícone só enquanto algo roda (clique abre, botão direito para tudo)
 }
 ```
 
-Cores: num calOS seguem o tema atual (rode `~/.local/bin/inputforge theme` ao trocar de tema). Fora dele, uma
-paleta escura própria, e `~/.config/inputforge/theme.json` sobrescreve qualquer cor:
+Cores: a janela segue o tema GTK do sistema. O HUD e o painel rápido seguem o tema do calOS
+(rode `~/.local/bin/inputforge theme` ao trocar de tema); fora dele, uma paleta escura
+própria, e `~/.config/inputforge/theme.json` sobrescreve qualquer cor:
 `{"accent": "#7aa2f7", "background": "#16161e", "foreground": "#c0caf5"}`.
 
 Opcional: com o [OpenAurum](https://github.com/its-danilo/openaurum) instalado, a tecla do
@@ -170,7 +177,7 @@ inputforge waybar | binds  módulo da waybar / atalhos como `hyprctl binds -j`
 | `inputforge/engine.py` | motor: perfis, gatilhos, execuções, gravador, IPC |
 | `inputforge/devices.py` | leitura (evdev), grab e teclado/mouse virtuais (uinput) |
 | `inputforge/screen.py` | observador de tela (grim) |
-| `inputforge/app.py` + `ui/` | janela e editor (WebKitGTK) |
+| `inputforge/app.py`, `pages.py`, `editor.py`, `widgets.py` | janela (GTK 4 + libadwaita) |
 | `inputforge/hud.py`, `inputforge/bar.py` | HUD e painel rápido (GTK 4 + layer-shell) |
 
 ## Desenvolvimento
@@ -180,6 +187,4 @@ python3 tests/test_engine.py          # motor com teclado, mouse, Hyprland e tel
 bin/inputforge status                 # roda direto do checkout
 ```
 
-Abrir `ui/index.html?static` num navegador mostra a interface com um motor de mentira
-(`&page=settings`, `&page=profile&id=sob&drawer=rot`…), para mexer no visual sem o WebKit.
 Teste sem mandar teclas de verdade: o motor real digita na janela em foco.

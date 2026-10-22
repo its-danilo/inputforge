@@ -50,6 +50,7 @@ def _trigger(key="KEY_F8", mods=()):
 
 DEFAULT_SETTINGS = {
     "global_enabled": True,
+    "chosen": {},  # window class -> profile id, when several profiles match the same game
     "countdown": 3,  # s before a run started from the window begins
     "panic": {"key": "KEY_ESC", "mods": [], "hold_ms": 800, "block": False},
     "record_stop": {"key": "KEY_F12", "mods": [], "hold_ms": 0, "block": False},
@@ -307,6 +308,8 @@ def normalize(cfg):
     aurum = s.get("aurum") if isinstance(s.get("aurum"), dict) else {}
     settings = {
         "global_enabled": _bool(s.get("global_enabled"), ds["global_enabled"]),
+        "chosen": {_str(k, "", 200): _str(v, "", 16) for k, v in (s.get("chosen") or {}).items()
+                   if isinstance(k, str) and isinstance(v, str)} if isinstance(s.get("chosen"), dict) else {},
         "countdown": _num(s.get("countdown"), ds["countdown"], 0, 30, int),
         "panic": _norm_trigger(s.get("panic"), ds["panic"]),
         "record_stop": _norm_trigger(s.get("record_stop"), ds["record_stop"]),

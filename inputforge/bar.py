@@ -2,13 +2,15 @@
 
 Lists the armed profile's bindings (the game's, else "Qualquer janela"):
   1-9 / click   start or stop a clicker/macro, run a command, turn a remap on/off
+  P / the name  switch to another profile of this game (several can match one window:
+                every Roblox game runs in Sober); remembered per game
   ↑↓ + Enter    the same on the selected row
   E             edit in the full window (hides the game, like before)
   Esc           close (SUPER + CTRL + A again too)
 Starting something closes the panel: its countdown shows on the HUD, over the game.
 
 Layer-shell surface on the overlay layer, so the game stays fullscreen under it, with the
-keyboard while open. Native GTK (no WebKit): it opens instantly. One instance; the CLI
+keyboard while open. Native GTK: it opens instantly. One instance; the CLI
 toggles it through BAR_PID.
 """
 
@@ -64,6 +66,15 @@ def css(c):
     .sub {{ color: {c['muted']}; font-size: 12px; font-weight: 500; }}
     .chip {{ color: {c['fg']}; font-size: 12px; font-weight: 650; border-radius: 99px; padding: 4px 11px;
              background: alpha({c['accent']}, 0.14); border: 1px solid alpha({c['accent']}, 0.4); }}
+    menubutton.chip {{ padding: 0; }}
+    menubutton.chip > button {{ background: none; box-shadow: none; border: none; min-height: 0;
+                                padding: 4px 8px 4px 11px; color: {c['fg']}; border-radius: 99px; }}
+    menubutton.chip:hover {{ background: alpha({c['accent']}, 0.24); }}
+    popover.profiles contents {{ background: {c['surface2']}; border: 1px solid alpha({c['fg']}, 0.14); border-radius: 14px; padding: 6px; }}
+    popover.profiles button {{ font-family: {FONT}; color: {c['fg']}; font-weight: 600; border-radius: 9px; padding: 7px 12px;
+                               background: none; box-shadow: none; }}
+    popover.profiles button:hover {{ background: alpha({c['fg']}, 0.08); }}
+    popover.profiles button.current {{ color: {c['accent']}; }}
     .row {{
         border-radius: 15px; padding: 10px 12px; margin-bottom: 6px;
         background: alpha({c['fg']}, 0.04); border: 1px solid alpha({c['fg']}, 0.07);
@@ -210,9 +221,14 @@ class Bar:
             except ValueError:
                 continue
             if msg.get("event") == "state":
-                # the runs only: while the panel has the keyboard, Hyprland may report no
-                # focused window, and the armed profile must not jump to the global one
-                self.st["runs"] = msg["state"].get("runs", [])
+                # the runs, and the game's profile when it was switched (choose_profile)
+                st = msg["state"]
+                self.st["runs"] = st.get("runs", [])
+                if st.get("candidates"):
+                    self.st["candidates"] = st["candidates"]
+                    armed = (st.get("armed") or {}).get("id")
+                    if armed in [c["id"] for c in st["candidates"]]:
+                        self.profile_id = armed
                 changed = True
             elif msg.get("event") == "config":
                 self.cfg = msg["config"]
@@ -254,7 +270,24 @@ class Bar:
         s.add_css_class("sub")
         col.append(s)
         head.append(col)
-        chip = Gtk.Label(label=p["name"], valign=Gtk.Align.CENTER)
+        cands = self.st.get("candidates") or []
+        if len(cands) > 1:  # several profiles for this game: the name switches between them
+            chip = Gtk.MenuButton(label=p["name"], valign=Gtk.Align.CENTER, tooltip_text="Trocar o perfil (P)",
+                                  always_show_arrow=True)
+            pop = Gtk.Popover()
+            pop.add_css_class("profiles")
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            for c in cands:
+                b = Gtk.Button(label=("✓  " if c["id"] == p["id"] else "     ") + c["name"] + ("" if c.get("enabled", True) else "  (desligado)"))
+                b.get_child().set_xalign(0)
+                if c["id"] == p["id"]:
+                    b.add_css_class("current")
+                b.connect("clicked", lambda _b, pid=c["id"]: (pop.popdown(), self.choose(pid)))
+                col.append(b)
+            pop.set_child(col)
+            chip.set_popover(pop)
+        else:
+            chip = Gtk.Label(label=p["name"], valign=Gtk.Align.CENTER)
         chip.add_css_class("chip")
         head.append(chip)
         self.panel.append(head)
@@ -279,7 +312,8 @@ class Bar:
         foot = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         foot.add_css_class("foot")
         hint = Gtk.Label(xalign=0, hexpand=True, valign=Gtk.Align.CENTER)
-        hint.set_markup("<b>1–9</b> liga/desliga · <b>Esc</b> fecha")
+        many = len(self.st.get("candidates") or []) > 1
+        hint.set_markup("<b>1–9</b> liga/desliga · " + ("<b>P</b> perfil · " if many else "") + "<b>Esc</b> fecha")
         hint.add_css_class("hint")
         foot.append(hint)
         if self.st.get("runs"):
@@ -375,6 +409,15 @@ class Bar:
             return
         self.app.quit()
 
+    def choose(self, pid):
+        try:
+            ipc.call("choose_profile", profile=pid)
+        except (ipc.EngineDown, RuntimeError):
+            return
+        self.profile_id = pid
+        self.sel = 0
+        self.render()
+
     def stop_all(self):
         try:
             ipc.call("stop")
@@ -399,6 +442,12 @@ class Bar:
         digits.update({getattr(keys.e, f"KEY_KP{n}"): n for n in range(1, 10)})
         if evdev in digits:
             self.activate(digits[evdev] - 1)
+            return True
+        if evdev == keys.e.KEY_P:  # next profile of this game
+            ids = [c["id"] for c in self.st.get("candidates") or []]
+            if len(ids) > 1:
+                cur = ids.index(self.profile_id) if self.profile_id in ids else -1
+                self.choose(ids[(cur + 1) % len(ids)])
             return True
         if evdev == keys.e.KEY_E:
             self.edit()
