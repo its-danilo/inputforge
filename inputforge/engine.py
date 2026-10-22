@@ -148,9 +148,8 @@ class Engine:
         self.screen_trigs = []  # [(binding, profile, region)] of the armed profile
         self.screen_task = None
         self.ref_capture = None  # {"until"}: a region reference being captured (HUD countdown)
-        # InputForge surfaces over the game: connection -> None (the Game Bar: covers it, all
-        # runs rest while it's open) or [x, y, w, h] (the editor over a fullscreen game: runs
-        # rest only while the pointer is on it)
+        # InputForge surfaces over the game (Game Bar, editor): connection -> [x, y, w, h], runs
+        # and hotkeys rest only while the pointer is on one of them; None = rest while it's open
         self.ui_overlay = {}
         self.overlay_now = False
         self.overlay_task = None

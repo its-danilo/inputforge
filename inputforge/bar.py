@@ -10,8 +10,11 @@ Lists the armed profile's bindings (the game's, else "Qualquer janela"):
 Starting something closes the panel: its countdown shows on the HUD, over the game.
 
 libadwaita, like the window (it follows the GTK theme), in a layer-shell surface on the
-overlay layer: the game stays fullscreen under it. It has the keyboard while open, and runs
-pause meanwhile (ui_overlay). One instance; the CLI toggles it through BAR_PID.
+overlay layer: the game stays fullscreen under it and stays playable. The keyboard is
+on-demand: the panel gets it when it opens (Hyprland focuses on-demand layers on map, so
+SUPER + CTRL + A, 1 works), a click on the game takes it back, a click here returns it. It
+reports its rectangle (ui_overlay): runs rest only while the pointer is on it.
+One instance; the CLI toggles it through BAR_PID.
 """
 
 import json
@@ -65,9 +68,10 @@ class Bar:
         LayerShell.init_for_window(self.win)
         LayerShell.set_namespace(self.win, paths.NS_BAR)
         LayerShell.set_layer(self.win, LayerShell.Layer.OVERLAY)
-        LayerShell.set_keyboard_mode(self.win, LayerShell.KeyboardMode.EXCLUSIVE)
+        LayerShell.set_keyboard_mode(self.win, LayerShell.KeyboardMode.ON_DEMAND)
         LayerShell.set_exclusive_zone(self.win, -1)
         mon = hypr.focused_monitor()
+        self.mon = mon
         if mon:
             monitors = Gdk.Display.get_default().get_monitors()
             for i in range(monitors.get_n_items()):
@@ -80,12 +84,13 @@ class Bar:
         self.title = Adw.WindowTitle(title="InputForge")
         self.header.set_title_widget(self.title)
         tv.add_top_bar(self.header)
+        # the list keeps its natural height (no empty band under the last row); a scroller
+        # only when there are too many rows for the screen
         self.list = Gtk.ListBox(css_classes=["boxed-list"], selection_mode=Gtk.SelectionMode.SINGLE,
-                                margin_start=14, margin_end=14, margin_top=6, margin_bottom=10)
+                                valign=Gtk.Align.START, margin_start=14, margin_end=14, margin_top=6, margin_bottom=10)
         self.list.connect("row-activated", lambda _l, row: self.activate(row.get_index()))
-        scroll = Gtk.ScrolledWindow(child=self.list, hscrollbar_policy=Gtk.PolicyType.NEVER,
-                                    propagate_natural_height=True, max_content_height=560)
-        tv.set_content(scroll)
+        self.body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        tv.set_content(self.body)
         self.foot = Gtk.Box(spacing=8, css_classes=["panel-foot"])
         tv.add_bottom_bar(self.foot)
         self.win.set_content(tv)
@@ -117,8 +122,7 @@ class Bar:
         except OSError:
             return
         self.sock.sendall(b'{"id": "sub", "cmd": "subscribe"}\n')
-        # runs pause and hotkeys rest while the panel covers the game (until this disconnects)
-        self.sock.sendall(b'{"id": "sub", "cmd": "ui_overlay", "open": true}\n')
+        self.report_rect()
         self.sock.setblocking(False)
         GLib.io_add_watch(self.sock.fileno(), GLib.PRIORITY_DEFAULT, GLib.IOCondition.IN | GLib.IOCondition.HUP,
                           self.on_data)
@@ -159,6 +163,22 @@ class Bar:
         if changed:
             self.render()
         return True
+
+    def report_rect(self):
+        """Where the panel is (centered on its monitor): runs rest while the pointer is on it."""
+        if not getattr(self, "sock", None) or not self.mon:
+            return False
+        w, h = self.win.get_width(), self.win.get_height()
+        if w <= 1 or h <= 1:  # not allocated yet: once it is
+            GLib.timeout_add(50, self.report_rect)
+            return False
+        mw, mh = int(self.mon["width"] / self.mon["scale"]), int(self.mon["height"] / self.mon["scale"])
+        rect = [self.mon["x"] + (mw - w) // 2, self.mon["y"] + (mh - h) // 2, w, h]
+        try:
+            self.sock.sendall(json.dumps({"id": "sub", "cmd": "ui_overlay", "open": True, "rect": rect}).encode() + b"\n")
+        except OSError:
+            pass
+        return False
 
     # ---- drawing ---------------------------------------------------------------
     def render(self):
@@ -204,6 +224,16 @@ class Bar:
             self.list.append(self.row(i, b))
         if rows:
             self.list.select_row(self.list.get_row_at_index(min(sel_i, len(rows) - 1)))
+        if (c := self.body.get_first_child()) is not None:
+            self.body.remove(c)
+            if isinstance(c, Gtk.ScrolledWindow):
+                c.set_child(None)
+        if len(rows) > 7:
+            self.body.append(Gtk.ScrolledWindow(child=self.list, hscrollbar_policy=Gtk.PolicyType.NEVER,
+                                                min_content_height=7 * 66))
+        else:
+            self.body.append(self.list)
+        GLib.idle_add(self.report_rect)
 
         while (c := self.foot.get_first_child()) is not None:
             self.foot.remove(c)
