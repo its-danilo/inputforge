@@ -34,7 +34,7 @@ from inputforge.paths import SOCKET  # noqa: E402
 
 NAME = paths.NS_HUD
 IDLE_S = 4.0
-FONT = "Inter, 'Noto Sans', sans-serif"
+FONT = "inherit"  # the system's UI font, like the window and the Game Bar
 ICON = {"clicker": "󰍽", "macro": "󰑮", "remap": "󰌌", "command": "󰆍"}
 
 
@@ -222,7 +222,8 @@ class Hud:
         acc = [int(c["accent"][i:i + 2], 16) / 255 for i in (1, 3, 5)]
         acc2 = [int(c["accent2"][i:i + 2], 16) / 255 for i in (1, 3, 5)]
         fgc = [int(c["fg"][i:i + 2], 16) / 255 for i in (1, 3, 5)]
-        font = Pango.FontDescription.from_string("Inter Bold 15")
+        family = (Gtk.Settings.get_default().props.gtk_font_name or "Sans").rsplit(" ", 1)[0]
+        font = Pango.FontDescription.from_string(f"{family} Bold 15")
         area = Gtk.DrawingArea()
         area.set_content_width(40)
         area.set_content_height(40)
