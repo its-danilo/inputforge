@@ -190,3 +190,7 @@ bin/inputforge status                 # roda direto do checkout
 ```
 
 Teste sem mandar teclas de verdade: o motor real digita na janela em foco.
+
+## Licença
+
+[GPL-3.0](LICENSE). Sem relação com nenhum jogo nem com o Hyprland. Usar macros ou autoclicker pode ir contra as regras de alguns jogos: confira antes.
